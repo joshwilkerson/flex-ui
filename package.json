@@ -1,0 +1,86 @@
+{
+  "name": "flex-ui",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "CSS-first responsive flexbox layouts with data attributes and optional React components",
+  "bin": {
+    "flex-ui": "./bin/flex-ui.ts"
+  },
+  "main": "./dist/flex-ui.css",
+  "exports": {
+    ".": "./dist/flex-ui.css",
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js",
+      "require": "./dist/react.cjs"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js",
+      "require": "./dist/config.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "scripts",
+    "src/tokens",
+    "src/config.ts"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "test:unit": "jest",
+    "test:visual": "playwright test",
+    "test": "npm run test:unit && npm run test:visual",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "figlet": "^1.11.0",
+    "inquirer": "^12.11.1",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.59.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/figlet": "^1.7.0",
+    "@types/inquirer": "^9.0.9",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "ts-jest": "^29.4.9",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vite": "^7.2.4",
+    "vite-plugin-dts": "^4.5.4"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "css",
+    "flexbox",
+    "layout",
+    "responsive",
+    "data-attributes",
+    "react",
+    "flex"
+  ],
+  "license": "MIT"
+}
