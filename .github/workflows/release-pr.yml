@@ -1,0 +1,182 @@
+name: Prepare Release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version bump type
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - prepatch
+          - preminor
+          - premajor
+          - prerelease
+      preid:
+        description: Prerelease identifier (used for pre* and prerelease)
+        required: false
+        default: alpha
+        type: string
+      dry-run:
+        description: Run checks and version bump without pushing or PR creation
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare-release-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard actor permission
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          permission="$(gh api "/repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission" --jq '.permission')"
+          case "$permission" in
+            admin|maintain|write)
+              echo "Actor permission '$permission' is allowed."
+              ;;
+            *)
+              echo "Actor permission '$permission' is not allowed to run release automation."
+              exit 1
+              ;;
+          esac
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Visual tests
+        run: npm run test:visual
+
+      - name: Determine release mode
+        id: mode
+        env:
+          VERSION_TYPE: ${{ inputs.version }}
+        run: |
+          if [[ "$VERSION_TYPE" == "patch" || "$VERSION_TYPE" == "minor" || "$VERSION_TYPE" == "major" ]]; then
+            echo "stable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require changelog update for stable release
+        if: steps.mode.outputs.stable == 'true'
+        run: |
+          if [[ ! -f CHANGELOG.md ]]; then
+            echo "CHANGELOG.md is required for stable releases."
+            exit 1
+          fi
+
+          last_stable_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)"
+          if [[ -z "$last_stable_tag" ]]; then
+            if [[ ! -s CHANGELOG.md ]]; then
+              echo "CHANGELOG.md must contain release notes for stable releases."
+              exit 1
+            fi
+            exit 0
+          fi
+
+          if git diff --quiet "$last_stable_tag"..HEAD -- CHANGELOG.md; then
+            echo "CHANGELOG.md has no updates since $last_stable_tag."
+            echo "Add changelog entries before running a stable release."
+            exit 1
+          fi
+
+      - name: Bump version
+        id: bump
+        env:
+          VERSION_TYPE: ${{ inputs.version }}
+          PREID: ${{ inputs.preid }}
+        run: |
+          if [[ "$VERSION_TYPE" == pre* || "$VERSION_TYPE" == "prerelease" ]]; then
+            npm version "$VERSION_TYPE" --preid="$PREID" --no-git-tag-version
+          else
+            npm version "$VERSION_TYPE" --no-git-tag-version
+          fi
+
+          new_version="$(node -e "const fs=require('fs');process.stdout.write(JSON.parse(fs.readFileSync('package.json','utf8')).version)")"
+          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "branch=release/v$new_version" >> "$GITHUB_OUTPUT"
+
+      - name: Commit release bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${{ steps.bump.outputs.branch }}"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No release changes to commit."
+            exit 1
+          fi
+          git commit -m "chore(release): v${{ steps.bump.outputs.version }}"
+      - name: Ensure release branch does not already exist
+        if: ${{ !inputs['dry-run'] }}
+        run: |
+          if git ls-remote --exit-code --heads origin "${{ steps.bump.outputs.branch }}" >/dev/null 2>&1; then
+            echo "Remote branch ${{ steps.bump.outputs.branch }} already exists."
+            echo "Close or merge the existing release PR before creating another release with this version."
+            exit 1
+          fi
+
+      - name: Push release branch
+        if: ${{ !inputs['dry-run'] }}
+        run: git push --set-upstream origin "${{ steps.bump.outputs.branch }}"
+
+      - name: Create release PR
+        if: ${{ !inputs['dry-run'] }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing_pr="$(gh pr list --head "${{ steps.bump.outputs.branch }}" --base main --state open --json number --jq '.[0].number')"
+          if [[ -n "$existing_pr" && "$existing_pr" != "null" ]]; then
+            echo "Release PR already exists: #$existing_pr"
+            exit 0
+          fi
+
+          cat > /tmp/release-pr-body.md <<EOF
+          Automated release PR for v${{ steps.bump.outputs.version }}.
+
+          - version type: \`${{ inputs.version }}\`
+          - prerelease id: \`${{ inputs.preid }}\`
+          - actor: @${{ github.actor }}
+          EOF
+
+          gh pr create \
+            --base main \
+            --head "${{ steps.bump.outputs.branch }}" \
+            --title "chore(release): v${{ steps.bump.outputs.version }}" \
+            --body-file /tmp/release-pr-body.md
+
+      - name: Dry run summary
+        if: ${{ inputs['dry-run'] }}
+        run: |
+          echo "Dry run complete."
+          echo "Computed version: ${{ steps.bump.outputs.version }}"
+          echo "Would create branch: ${{ steps.bump.outputs.branch }}"
