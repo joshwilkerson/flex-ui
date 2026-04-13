@@ -1,6 +1,6 @@
 {
   "name": "@joshwilkerson/flex-ui",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "type": "module",
   "description": "CSS-first responsive flexbox layouts with data attributes and optional React components",
   "bin": {
