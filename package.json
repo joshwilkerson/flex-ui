@@ -27,6 +27,13 @@
     "src/tokens",
     "src/config.ts"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joshwilkerson/flex-ui.git"
+  },
   "scripts": {
     "build": "vite build",
     "test:unit": "jest",
